@@ -4,85 +4,6 @@ enum alignment {
   Center  # TODO : Implement
 }
 
-class column {
-  [string]$FieldName
-  [string]$Label
-  [int]$Width #Percentage
-  [alignment]$Align = [alignment]::Left
-
-
-  column(
-    [string]$FieldName,
-    [string]$Label,
-    [int]$Width
-  ) {
-    $this.FieldName = $FieldName
-    $this.Label = $Label
-    $this.Width = $Width
-  }
-  
-  column(
-    [string]$FieldName,
-    [string]$Label,
-    [int]$Width,
-    [alignment]$Align
-  ) {
-    $this.FieldName = $FieldName
-    $this.Label = $Label
-    $this.Width = $Width
-    $this.Align = $Align
-  }
-}
-
-class package {
-  [string]$Name
-  [string]$Id
-  [string[]]$AvailableVersions
-  [string]$Source
-  [bool]$IsUpdateAvailable
-  [string]$InstalledVersion
-  [string]$Available
-
-  package(
-    [string]$Name,
-    [string]$Id,
-    [string[]]$AvailableVersions,
-    [string]$Source,
-    [bool]$IsUpdateAvailable,
-    [string]$InstalledVersion
-  ) {
-    $this.Name = $Name
-    $this.Id = $Id
-    $this.AvailableVersions = $AvailableVersions
-    $this.Source = $Source
-    $this.IsUpdateAvailable = $IsUpdateAvailable
-    $this.InstalledVersion = $InstalledVersion
-    $this.Available = $AvailableVersions[0]
-  }
-
-  package(
-    [string]$Name,
-    [string]$Id,
-    [string]$InstalledVersion
-  ) {
-    $this.Name = $Name
-    $this.Id = $Id
-    $this.InstalledVersion = $InstalledVersion
-  }
-  
-  package(
-    [string]$Name,
-    [string]$Id,
-    [string]$InstalledVersion,
-    [string]$Available
-  ) {
-    $this.Name = $Name
-    $this.Id = $Id
-    $this.InstalledVersion = $InstalledVersion
-    $this.Available = $Available
-  }
-}
-
 class Spinner {
   [hashtable]$Spinner
   [System.Collections.Hashtable]$statedata
@@ -169,7 +90,6 @@ class Spinner {
       $i = 0
       while ($true) {
         [System.Console]::setcursorposition($X, $Y)
-        # $text = "$([char]27)[35m$([char]27)[50m$($Frames[$i])$([char]27)[0m"  
         $text = $Frames[$i]    
         [system.console]::write($text)
         [System.Console]::setcursorposition(($X + $statedata.offset) + 1, $Y)
@@ -207,6 +127,59 @@ class Spinner {
       [system.Console]::CursorVisible = $true
     } 
   }
+}
+
+class Firebird {
+  $databaseName = ""
+  [System.Collections.Hashtable]$statedata
+  $runspace
+  [powershell]$session
+  [Int32]$X = $Host.UI.RawUI.CursorPosition.X
+  [Int32]$Y = $Host.UI.RawUI.CursorPosition.Y
+  [bool]$running = $false
+  [Int32]$width = $Host.UI.RawUI.BufferSize.Width
+  [string]$username = "sysdba"
+  [string]$password = "masterkey"
+  [string]$fbin = ""
+  [string]$isql = ""
+  [string]$createDBScript
+
+  Firebird(
+    [string]$DatabaseName
+  ) {
+    $this.databaseName = "$PSScriptRoot\$($DatabaseName)"
+    $fbBin = [string](Get-Service FirebirdServerDefaultInstance | Select-Object -ExpandProperty BinaryPathName)
+    $fbBin = $fbBin.Substring(0, $fbBin.LastIndexOf('\'))
+    $this.isql = "$($fbBin)\isql.exe"
+  }
+
+  [void] CreateDB() {
+    $this.createDBScript = @"
+  CREATE DATABASE '$this.databaseName'
+  USER '$($this.username)' PASSWORD '$($this.password)'
+  DEFAULT CHARACTER SET UTF8;
+  COMMIT;
+"@ 
+    $this.createDBScript | Out-File -FilePath "$PSScriptRoot\createDB.sql"
+    $this.runspace = [runspacefactory]::CreateRunspace()
+    $this.statedata = [System.Collections.Hashtable]::Synchronized([System.Collections.Hashtable]::new())
+    $this.statedata.command = "$($this.isql) -i $("$PSScriptRoot\createDB.sql")"
+    $this.runspace.Open()
+    $this.Runspace.SessionStateProxy.SetVariable("StateData", $this.StateData)
+    $sb = {
+      Invoke-Expression -Command $Statedata.command | Out-Null
+    }
+    $this.session = [powershell]::create()
+    $null = $this.session.AddScript($sb)
+    $this.session.Runspace = $this.runspace
+    $this.session.Invoke()
+    
+    $this.session.Stop()
+    $this.runspace.Close()
+    $this.runspace.Dispose()
+    Remove-Item -Path "$PSScriptRoot\createDB.sql"
+  }
+
 }
 
 $Theme = @{
