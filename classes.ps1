@@ -4,6 +4,10 @@ enum alignment {
   Center  # TODO : Implement
 }
 
+$modules = @{ FR = @("actipharm", "CaducielV6", "CIP", "CSVClient", "DynaCaisse", "esculapev6", "importlgpi", "Infosoft", "Leo1", "Leo2", "Lgo2", "NEV", "Opus", "periphar", "Pharmalandv7", "PharmaVitale", "SmartRX", "Vindilis", "VisioPharm", "Winpharma", "XLSoft")
+  BE             = @("FarmadTWin", "Goed", "Greenock", "ImportUltimate", "IPharma", "MultiPharma", "NextPharm", "Officinall", "Pharmony")
+}
+
 class Spinner {
   [hashtable]$Spinner
   [System.Collections.Hashtable]$statedata
@@ -155,10 +159,12 @@ class Firebird {
 
   [void] CreateDB() {
     $this.createDBScript = @"
-  CREATE DATABASE '$this.databaseName'
+    SET TERM ^ ;
+  CREATE DATABASE '$($this.databaseName)'
   USER '$($this.username)' PASSWORD '$($this.password)'
-  DEFAULT CHARACTER SET UTF8;
-  COMMIT;
+  PAGE_SIZE 16384 DEFAULT CHARACTER SET UTF8^
+  COMMIT^
+  SET TERM ; ^
 "@ 
     $this.createDBScript | Out-File -FilePath "$PSScriptRoot\createDB.sql"
     $this.runspace = [runspacefactory]::CreateRunspace()
@@ -177,7 +183,30 @@ class Firebird {
     $this.session.Stop()
     $this.runspace.Close()
     $this.runspace.Dispose()
-    Remove-Item -Path "$PSScriptRoot\createDB.sql"
+    # Remove-Item -Path "$PSScriptRoot\createDB.sql"
+  }
+
+  [void] ExecuteSQL(
+    [string]$sql
+  ) {
+    loadSql -file $sql | Out-File -FilePath "$PSScriptRoot\execute.sql"
+    # Invoke-Expression -Command $command
+    $this.runspace = [runspacefactory]::CreateRunspace()
+    $this.statedata = [System.Collections.Hashtable]::Synchronized([System.Collections.Hashtable]::new())
+    $this.statedata.command = "$($this.isql) $($this.databaseName) -i '$("$PSScriptRoot\execute.sql")' -u sysdba -p masterkey"
+    $this.runspace.Open()
+    $this.Runspace.SessionStateProxy.SetVariable("StateData", $this.StateData)
+    $sb = {
+      Invoke-Expression -Command $Statedata.command | Out-Null
+    }
+    $this.session = [powershell]::create()
+    $null = $this.session.AddScript($sb)
+    $this.session.Runspace = $this.runspace
+    $this.session.Invoke()
+    
+    $this.session.Stop()
+    $this.runspace.Close()
+    $this.runspace.Dispose()
   }
 
 }

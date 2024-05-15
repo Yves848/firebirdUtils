@@ -1,7 +1,7 @@
-. "$PSScriptRoot\visuals.ps1"
-. "$PSScriptRoot\classes.ps1"
-. "$PSscriptRoot\GumEnv.ps1"
-
+Import-Module -Name "$PSScriptRoot\classes.ps1" -Force
+Import-Module -name "$PSscriptRoot\GumEnv.ps1" -force
+import-module -name  "$PSScriptRoot\visuals.ps1" -force
+import-module -name  "$PSScriptRoot\Tools.ps1" -force
 $script:databaseName = "vierge"
 
 $username = "SYSDBA"
@@ -18,53 +18,117 @@ function isFirebirdStarted {
 
 # TODO: Display a menu with the different functions availables
 function displayMenu {
-    # Clear-Host
+    Clear-Host
     $result = 0
     $path = (Get-Location).Path
     while ($result -ne -1) {
         gum style "Commit PWSH Utils ($($path))" --foreground $($Theme["brightYellow"]) --bold --border rounded --width ($Host.UI.RawUI.BufferSize.Width - 2) --align center
-        $options = @(
-            "Créer une DB PHA ($($script:databaseName))",
-            "Initialiser un module",
-            "Quitter"
-        )
+        $menu = [ordered]@{
+            "Créer une DB" = "createDB"
+            "Fermer DB" = "closeDB"
+            "Créer une DB PHA" = "createPHA"
+            "Quitter" = "exit"
+        }
+
+        $options = @()
+
+        $menu.keys | ForEach-Object {
+            if ($menu[$_] -match 'closeDB') {
+                if ($script:databaseName -ne "vierge") {
+                    $options += $_
+                }
+            } else {
+                $options += $_
+            }    
+        }
+        
+        # $options += "Créer une DB PHA"
+        # if ($script:databaseName -ne "vierge") {
+        #     $options += "Fermer DB PHA ($($script:databaseName))"
+        # }
+        # $options += "Initialiser un module"
+        # $options += "Quitter"
+        
+        
         $choice = $options -join "`n" | gum choose 
         Clear-Host
-        $index = $options.IndexOf($choice)
-        switch ($index) {
-            0 { createDB }
-            1 { createPHA }
+        # $index = $options.IndexOf($choice)
+        switch ($menu[$choice]) {
+            "createDB" { createDB }
+            "closeDB" { closeDB }
+            "createPHA" { createPHA }
+            "exit" { $result = -1 }
             Default { $result = -1 }
         }
     }
 }
 
-function createPHA {
-    chooseCountry
+function closeDB {
+    $script:databaseName = "Vierge"
 }
 
-function chooseCountry {
-    if (Test-Path -Path ".\Scripts\Commun")
-    {
-        $dir = get-Childitem -Directory -Path ".\Scripts\Commun" | ForEach-Object {$_.BaseName}
+function createPHA {
+    if (Test-Path -Path ".\Scripts\Commun") {
         $sql = @()
         Get-ChildItem -Path ".\Scripts\Commun" -Filter "*.sql" | ForEach-Object {
             $sql += $_.FullName
         }
-        gum style "Choisir un pays" --foreground $($Theme["cyan"]) --bold --border rounded --width ($Host.UI.RawUI.BufferSize.Width - 2) --align center
-        $pays = ($dir -join "`n") | gum choose
-        if ($pays) {
-            Get-ChildItem -Path ".\Scripts\Commun\$($pays)" -Filter "*.sql" | ForEach-Object {
-                $sql += $_.FullName
-            }   
-            return $sql
+        $pays = chooseCountry
+        Get-ChildItem -Path ".\Scripts\Commun\$($pays)" -Filter "*.sql" | ForEach-Object {
+            $sql += $_.FullName
+        }   
+        $module = chooseModule -pays $pays
+        Get-ChildItem -Path ".\Scripts\Modules\Import" -Filter "$module*.sql" | ForEach-Object {
+            $sql += $_.FullName
+        }   
+        # return $sql
+        $title = gum style "Création de la DB PHA ($($module))" --foreground $($Theme["red"]) --bold --border rounded --width ($Host.UI.RawUI.BufferSize.Width - 2) --align center
+        $title | ForEach-Object {
+            [System.Console]::WriteLine($_)
         }
-        else {
-            return $null
+        $Spinner = [spinner]::New("Dots")
+        $fb = [Firebird]::New("$script:databaseName")
+        $sql | ForEach-Object {
+            if ($Spinner.running -eq $false) {
+                $Spinner.Start("Exécution de $($_)")
+            } else {
+                $Spinner.SetLabel("Exécution de $($_)")
+            }
+            
+            $fb.ExecuteSQL($_)
+            
         }
-    } else {
+        $Spinner.Stop()
+    }
+    else {
         return $null
     }
+    
+}
+
+function chooseCountry {
+    Clear-Host
+    $dir = Get-ChildItem -Directory -Path ".\Scripts\Commun" | ForEach-Object { $_.BaseName }
+    $title = gum style "Choisir un pays" --foreground $($Theme["cyan"]) --bold --border rounded --width ($Host.UI.RawUI.BufferSize.Width - 2) --align center
+    $title | ForEach-Object {
+        [System.Console]::WriteLine($_)
+    }
+    $pays = ($dir -join "`n") | gum choose
+    return $pays
+    
+}
+
+function chooseModule {
+    param(
+        [string]$pays
+    )
+    Clear-Host  
+    $title = gum style "Choisir un module $($pays)" --foreground $($Theme["cyan"]) --bold --border rounded --width ($Host.UI.RawUI.BufferSize.Width - 2) --align center
+    $title | ForEach-Object {
+        [System.Console]::WriteLine($_)
+    }
+    $module = ($modules["$pays"] -join "`n") | gum choose
+    return $module
 }
 
 function createEmptyDB {
@@ -97,7 +161,7 @@ function createDB {
         $Spinner = [spinner]::New("Dots")
         $Spinner.Start("Création de la DB");
         createEmptyDB($databaseName)
-        Start-Sleep -Seconds 2
+        # Start-Sleep -Seconds 2
         $Spinner.Stop()
     }
 }
@@ -129,3 +193,6 @@ if (-not (isGumInstalled)) {
     installGum
 }
 
+# Set-Location 'C:\Commit 4.8'
+
+# Start-CommitUtil
