@@ -1,7 +1,7 @@
 Import-Module -Name "$PSScriptRoot\classes.ps1" -Force
-Import-Module -name "$PSscriptRoot\GumEnv.ps1" -force
-import-module -name  "$PSScriptRoot\visuals.ps1" -force
-import-module -name  "$PSScriptRoot\Tools.ps1" -force
+Import-Module -Name "$PSscriptRoot\GumEnv.ps1" -Force
+Import-Module -Name  "$PSScriptRoot\visuals.ps1" -Force
+Import-Module -Name  "$PSScriptRoot\Tools.ps1" -Force
 $script:databaseName = "vierge"
 
 $username = "SYSDBA"
@@ -16,7 +16,6 @@ function isFirebirdStarted {
     return $true
 }
 
-# TODO: Display a menu with the different functions availables
 function displayMenu {
     Clear-Host
     $result = 0
@@ -24,31 +23,23 @@ function displayMenu {
     while ($result -ne -1) {
         gum style "Commit PWSH Utils ($($path))" --foreground $($Theme["brightYellow"]) --bold --border rounded --width ($Host.UI.RawUI.BufferSize.Width - 2) --align center
         $menu = [ordered]@{
-            "Créer une DB" = "createDB"
-            "Fermer DB" = "closeDB"
+            "Créer une DB"     = "createDB"
+            "Fermer DB"        = "closeDB"
             "Créer une DB PHA" = "createPHA"
-            "Quitter" = "exit"
+            "Quitter"          = "exit"
         }
 
         $options = @()
-
         $menu.keys | ForEach-Object {
             if ($menu[$_] -match 'closeDB') {
                 if ($script:databaseName -ne "vierge") {
                     $options += $_
                 }
-            } else {
+            }
+            else {
                 $options += $_
             }    
         }
-        
-        # $options += "Créer une DB PHA"
-        # if ($script:databaseName -ne "vierge") {
-        #     $options += "Fermer DB PHA ($($script:databaseName))"
-        # }
-        # $options += "Initialiser un module"
-        # $options += "Quitter"
-        
         
         $choice = $options -join "`n" | gum choose 
         Clear-Host
@@ -91,7 +82,8 @@ function createPHA {
         $sql | ForEach-Object {
             if ($Spinner.running -eq $false) {
                 $Spinner.Start("Exécution de $($_)")
-            } else {
+            }
+            else {
                 $Spinner.SetLabel("Exécution de $($_)")
             }
             
@@ -180,7 +172,15 @@ function isGumInstalled {
 }
 
 function Start-CommitUtil {
-    displayMenu
+    if (Test-Path -Path ".\Scripts\Commun") {
+        displayMenu
+    }
+    else {
+        $buffer = gum style "Ce script doit être utilisé dans un répertoire Commit" --border "rounded" --width ($Host.UI.RawUI.BufferSize.Width - 2) --foreground $($Theme["red"])  
+        $buffer | ForEach-Object {
+            [System.Console]::write($_)
+        }
+    }
 }
     
 function installGum {
